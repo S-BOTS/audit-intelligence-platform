@@ -1,3 +1,43 @@
+# Audit Intelligence Platform
+
+### AI-Enabled Audit Analytics, Risk Scoring & Continuous Monitoring
+
+The Audit Intelligence Platform is an evolving audit analytics project designed to automate transaction testing, identify risk indicators, prioritize audit exceptions, and support data-driven audit investigations.
+
+The current version focuses on automated journal-entry analysis using Python, pandas, SQL, and configurable audit rules.
+
+## Current Version
+
+**Automated Journal Entry Auditor v0.1**
+
+The tool analyzes a journal-entry population and identifies transactions that may require additional audit review.
+
+A flagged transaction represents a risk indicator or audit exception and does not, by itself, constitute an audit finding.
+
+## Current Audit Tests
+
+The v0.1 engine currently evaluates:
+
+- Weekend journal postings
+- Potential duplicate transactions
+- Round-dollar transactions
+- High-value transactions
+- Transaction-level risk scoring
+- Low, Medium, and High risk classification
+- Journal population analytics
+- Activity analysis by journal preparer
+- SQL and Python risk-score reconciliation
+
+## Technology Stack
+
+- Python
+- pandas
+- SQL / SQLite
+- JSON configuration
+- openpyxl
+- Excel
+- Git / GitHub 
+
 # AI Audit Lab – Journal Entry Risk Analyzer
 
 A Python-based audit analytics project designed to identify potentially high-risk journal entries and prioritize them for further audit investigation.
