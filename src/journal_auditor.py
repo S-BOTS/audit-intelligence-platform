@@ -2,6 +2,7 @@ import pandas as pd
 import json
 from openpyxl.styles import Font,PatternFill
 from openpyxl.chart import BarChart, Reference
+import sqlite3
 
 # ============================================================
 # 1. LOAD AUDIT CONFIGURATION
@@ -356,9 +357,9 @@ with pd.ExcelWriter(
 
             # Create a chart showing the distribution of audit risk levels.
         chart = BarChart()
-    chart.title = "Risk Distribution"
-    chart.y_axis.title = "Number of Journal Entries"
-    chart.x_axis.title = "Risk Level"
+        chart.title = "Risk Distribution"
+        chart.y_axis.title = "Number of Journal Entries"
+        chart.x_axis.title = "Risk Level"
 
     # Values: High, Medium and Low counts in rows 5–7.
     data = Reference(

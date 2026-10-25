@@ -1,0 +1,11 @@
+Journal_ID,Posting_Date,Account,Description,Amount,Prepared_By,SQL_Risk_Score
+JE008,2026-09-12,6200,Professional Fees,10000.0,ADMIN,4
+JE002,2026-09-02,7200,Consulting Services,5000.0,JONES,3
+JE004,2026-09-06,5200,Equipment Repair,8750.0,ADMIN,3
+JE005,2026-09-08,4100,Customer Payment,2500.0,WILLIAMS,3
+JE006,2026-09-08,4100,Customer Payment,2500.0,WILLIAMS,3
+JE010,2026-09-15,7200,Consulting Services,5000.0,JONES,3
+JE003,2026-09-05,6100,Office Supplies,1000.0,SMITH,2
+JE001,2026-09-01,6100,Office Supplies,245.75,SMITH,0
+JE007,2026-09-10,7300,Travel Expense,487.36,JONES,0
+JE009,2026-09-14,6100,Office Supplies,83.47,SMITH,0
