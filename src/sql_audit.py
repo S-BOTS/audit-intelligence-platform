@@ -168,7 +168,8 @@ SELECT
     Amount,
     Prepared_By
 FROM journal_entries
-WHERE Amount % ? = 0
+WHERE Amount = CAST(Amount AS INTEGER)
+  AND CAST(Amount AS INTEGER) % ? = 0
 ORDER BY Amount DESC;
 """
 
@@ -280,8 +281,10 @@ SELECT
     END
     +
     CASE
-        WHEN Amount % ? = 0 THEN ?
-        ELSE 0
+    WHEN Amount = CAST(Amount AS INTEGER)
+         AND CAST(Amount AS INTEGER) % ? = 0
+    THEN ?
+    ELSE 0
     END
     +
 CASE
