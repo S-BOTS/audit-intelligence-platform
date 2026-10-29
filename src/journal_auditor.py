@@ -3,7 +3,23 @@ import json
 from openpyxl.styles import Font,PatternFill
 from openpyxl.chart import BarChart, Reference
 import sqlite3
+import hashlib
+from datetime import datetime
 
+# Create timestamp for this audit run
+run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+# Create a fingerprint of the journal data and audit configuration.
+# The fingerprint proves which inputs were used for this audit run.
+hasher = hashlib.sha256()
+
+with open("data/journal.csv", "rb") as file:
+    hasher.update(file.read())
+
+with open("config/audit_config.json", "rb") as file:
+    hasher.update(file.read())
+
+input_fingerprint = hasher.hexdigest()
 # ============================================================
 # 1. LOAD AUDIT CONFIGURATION
 # ============================================================
@@ -230,6 +246,8 @@ print(f"Low Risk              : {low_risk_count}")
 # Create a summary table for the Excel audit report.
 audit_summary = pd.DataFrame({
     "Metric": [
+        "Run Timestamp",
+        "Input Fingerprint",
         "Total Journal Entries",
         "Flagged Entries",
         "Flagged Percentage",
@@ -238,6 +256,8 @@ audit_summary = pd.DataFrame({
         "Low Risk"
     ],
     "Value": [
+        run_timestamp,
+        input_fingerprint,
         total_entries,
         flagged_entries,
         f"{flagged_percentage:.2f}%",

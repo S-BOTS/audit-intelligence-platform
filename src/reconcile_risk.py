@@ -9,10 +9,45 @@ python_results = pd.read_excel(
     "output/audit_risk_report.xlsx",
     sheet_name="Audit Results"
 )
+# Load Python audit metadata for provenance validation
+python_summary = pd.read_excel(
+    "output/audit_risk_report.xlsx",
+    sheet_name="Audit Summary"
+)
 
 sql_results = pd.read_csv(
     "output/sql_risk_results.csv"
 )
+
+# ============================================================
+# VALIDATE INPUT PROVENANCE
+# ============================================================
+
+# Extract the fingerprint recorded by the Python audit engine.
+python_fingerprint = python_summary.loc[
+    python_summary["Metric"] == "Input Fingerprint",
+    "Value"
+].iloc[0]
+
+# Verify that all SQL rows contain the same input fingerprint.
+sql_fingerprints = sql_results["SQL_Input_Fingerprint"].dropna().unique()
+
+if len(sql_fingerprints) != 1:
+    raise ValueError(
+        "Reconciliation stopped: inconsistent input fingerprints "
+        "found within the SQL results."
+    )
+
+sql_fingerprint = sql_fingerprints[0]
+
+# Stop reconciliation if the two engines used different inputs.
+if python_fingerprint != sql_fingerprint:
+    raise ValueError(
+        "Reconciliation stopped: Python and SQL results "
+        "were generated from different audit inputs."
+    )
+
+print("\nInput Fingerprint: MATCH")
 
 # Derive individual Python audit-rule flags from Risk_Reasons
 reasons = python_results["Risk_Reasons"].fillna("")

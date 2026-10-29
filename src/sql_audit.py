@@ -1,6 +1,23 @@
 import pandas as pd
 import sqlite3
 import json
+import hashlib
+from datetime import datetime
+
+# Create timestamp for this SQL audit run
+run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+# Create a fingerprint of the journal data and audit configuration.
+# This allows Python and SQL results to verify they used the same inputs.
+hasher = hashlib.sha256()
+
+with open("data/journal.csv", "rb") as file:
+    hasher.update(file.read())
+
+with open("config/audit_config.json", "rb") as file:
+    hasher.update(file.read())
+
+input_fingerprint = hasher.hexdigest()
 
 # ============================================================
 # 1. LOAD AUDIT CONFIGURATION
@@ -387,6 +404,10 @@ sql_risk_results = pd.read_sql_query(
     RISK_WEIGHTS["potential_duplicate"]
 )
 )
+# Record when the SQL audit results were generated
+sql_risk_results["SQL_Run_Timestamp"] = run_timestamp
+
+sql_risk_results["SQL_Input_Fingerprint"] = input_fingerprint
 
 print("\nSQL Transaction Risk Scores:")
 print(sql_risk_results)
