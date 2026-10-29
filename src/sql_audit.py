@@ -276,6 +276,52 @@ SELECT
     Prepared_By,
 
     CASE
+    WHEN strftime('%w', Posting_Date) IN ('0', '6')
+    THEN 1
+    ELSE 0
+END AS SQL_Weekend_Posting,
+
+CASE
+    WHEN Amount = CAST(Amount AS INTEGER)
+         AND CAST(Amount AS INTEGER) % ? = 0
+    THEN 1
+    ELSE 0
+END AS SQL_Round_Dollar,
+
+CASE
+    WHEN Amount >= ?
+    THEN 1
+    ELSE 0
+END AS SQL_High_Value,
+
+CASE
+    WHEN (
+        Posting_Date,
+        Account,
+        Description,
+        Amount,
+        Prepared_By
+    ) IN (
+        SELECT
+            Posting_Date,
+            Account,
+            Description,
+            Amount,
+            Prepared_By
+        FROM journal_entries
+        GROUP BY
+            Posting_Date,
+            Account,
+            Description,
+            Amount,
+            Prepared_By
+        HAVING COUNT(*) > 1
+    )
+    THEN 1
+    ELSE 0
+END AS SQL_Potential_Duplicate,
+
+    CASE
         WHEN Amount >= ? THEN ?
         ELSE 0
     END
@@ -328,13 +374,18 @@ sql_risk_results = pd.read_sql_query(
     sql_risk_query,
     connection,
     params=(
-        HIGH_VALUE_THRESHOLD,
-        RISK_WEIGHTS["high_value"],
-        ROUND_DOLLAR_BASE,
-        RISK_WEIGHTS["round_dollar"],
-        RISK_WEIGHTS["weekend_posting"],
-        RISK_WEIGHTS["potential_duplicate"]
-    )
+    ROUND_DOLLAR_BASE,                    # SQL_Round_Dollar flag
+    HIGH_VALUE_THRESHOLD,                 # SQL_High_Value flag
+
+    HIGH_VALUE_THRESHOLD,                 # High-value risk score
+    RISK_WEIGHTS["high_value"],
+
+    ROUND_DOLLAR_BASE,                    # Round-dollar risk score
+    RISK_WEIGHTS["round_dollar"],
+
+    RISK_WEIGHTS["weekend_posting"],
+    RISK_WEIGHTS["potential_duplicate"]
+)
 )
 
 print("\nSQL Transaction Risk Scores:")
