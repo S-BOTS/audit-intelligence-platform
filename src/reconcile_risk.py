@@ -181,3 +181,11 @@ mismatches = reconciliation[
 ]
 
 print("\nTotal Mismatches:", len(mismatches))
+
+# Fail the reconciliation when any audit result does not agree.
+if not mismatches.empty:
+    raise ValueError(
+        f"Reconciliation failed: {len(mismatches)} mismatch(es) detected."
+    )
+
+print("Reconciliation completed successfully.")
