@@ -6,6 +6,72 @@ import sqlite3
 import hashlib
 from datetime import datetime
 
+def load_journal(file_path):
+    """Load journal-entry data from a CSV file."""
+    return pd.read_csv(file_path)
+
+def validate_journal(journal):
+    """Validate required fields and data quality before audit testing."""
+
+    required_columns = [
+        "Journal_ID",
+        "Posting_Date",
+        "Account",
+        "Description",
+        "Amount",
+        "Prepared_By"
+    ]
+
+    missing_columns = [
+        column for column in required_columns
+        if column not in journal.columns
+    ]
+
+    if missing_columns:
+        raise ValueError(
+            f"Audit cannot continue. Missing required columns: {missing_columns}"
+        )
+
+        # Check required fields for missing/null values.
+    missing_values = journal[required_columns].isnull().sum()
+
+    # Keep only columns that contain missing values.
+    missing_values = missing_values[missing_values > 0]
+
+    if not missing_values.empty:
+        raise ValueError(
+            f"Audit cannot continue. Missing values found:\n{missing_values}"
+        )
+        # Convert Posting_Date to datetime.
+    journal["Posting_Date"] = pd.to_datetime(
+        journal["Posting_Date"],
+        errors="coerce"
+    )
+
+    # Identify records containing invalid dates.
+    invalid_dates = journal[journal["Posting_Date"].isnull()]
+
+    if not invalid_dates.empty:
+        raise ValueError(
+            f"Audit cannot continue. Invalid Posting_Date values found "
+            f"in {len(invalid_dates)} record(s)."
+        )
+        # Convert Amount to numeric.
+    journal["Amount"] = pd.to_numeric(
+        journal["Amount"],
+        errors="coerce"
+    )
+
+    # Identify records containing invalid amounts.
+    invalid_amounts = journal[journal["Amount"].isnull()]
+
+    if not invalid_amounts.empty:
+        raise ValueError(
+            f"Audit cannot continue. Invalid Amount values found "
+            f"in {len(invalid_amounts)} record(s)."
+        )
+    
+
 # Create timestamp for this audit run
 run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -72,76 +138,15 @@ if RISK_LEVELS["medium"] >= RISK_LEVELS["high"]:
 # ============================================================
 
 # Load journal entries from CSV
-journal = pd.read_csv("data/journal.csv")
+journal = load_journal("data/journal.csv")
+
 
 # ============================================================
 # 4. VALIDATE JOURNAL DATA
 # ============================================================
 
-# Define the minimum fields required by the audit tests.
-REQUIRED_COLUMNS = [
-    "Journal_ID",
-    "Posting_Date",
-    "Account",
-    "Description",
-    "Amount",
-    "Prepared_By"
-]
+validate_journal(journal)
 
-# Identify any required columns missing from the input file.
-missing_columns = [
-    column for column in REQUIRED_COLUMNS
-    if column not in journal.columns
-]
-
-# Stop processing if required audit data is unavailable.
-if missing_columns:
-    raise ValueError(
-        f"Audit cannot continue. Missing required columns: {missing_columns}"
-    )
-
-# Check required fields for missing/null values.
-missing_values = journal[REQUIRED_COLUMNS].isnull().sum()
-
-# Keep only fields that actually contain missing values.
-missing_values = missing_values[missing_values > 0]
-
-if not missing_values.empty:
-    raise ValueError(
-        f"Audit cannot continue. Missing values found:\n{missing_values}"
-    )
-
-# Convert Posting_Date to datetime.
-# Invalid dates are converted to NaT (Not a Time) instead of crashing.
-journal["Posting_Date"] = pd.to_datetime(
-    journal["Posting_Date"],
-    errors="coerce"
-)
-
-# Identify records containing invalid dates.
-invalid_dates = journal[journal["Posting_Date"].isnull()]
-
-if not invalid_dates.empty:
-    raise ValueError(
-        f"Audit cannot continue. Invalid Posting_Date values found "
-        f"in {len(invalid_dates)} record(s)."
-    )
-
-# Convert Amount to numeric.
-# Invalid values are converted to NaN instead of crashing.
-journal["Amount"] = pd.to_numeric(
-    journal["Amount"],
-    errors="coerce"
-)
-
-# Identify records containing invalid amounts.
-invalid_amounts = journal[journal["Amount"].isnull()]
-
-if not invalid_amounts.empty:
-    raise ValueError(
-        f"Audit cannot continue. Invalid Amount values found "
-        f"in {len(invalid_amounts)} record(s)."
-    )
 
 # Display basic information about the journal dataset
 print(journal.head())
@@ -426,3 +431,10 @@ print("\nAudit risk report exported successfully.")
 # git log --oneline          # View previous commits
 # git diff                  # View changes not yet staged
 # git status                # Check current Git status
+
+def main():
+    print("Audit Intelligence Platform - Journal Auditor")
+
+
+if __name__ == "__main__":
+    main()
