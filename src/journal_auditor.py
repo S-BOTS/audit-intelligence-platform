@@ -170,6 +170,159 @@ def classify_risk_levels(journal, risk_levels):
 
     return journal
 
+def calculate_audit_summary(journal):
+    """Calculate population-level audit statistics."""
+
+    total_entries = len(journal)
+
+    high_risk_count = (journal["Risk_Level"] == "High").sum()
+    medium_risk_count = (journal["Risk_Level"] == "Medium").sum()
+    low_risk_count = (journal["Risk_Level"] == "Low").sum()
+
+    flagged_entries = (journal["Risk_Score"] > 0).sum()
+
+    flagged_percentage = (
+        flagged_entries / total_entries * 100
+        if total_entries > 0
+        else 0
+    )
+
+    return {
+        "total_entries": total_entries,
+        "flagged_entries": flagged_entries,
+        "flagged_percentage": flagged_percentage,
+        "high_risk_count": high_risk_count,
+        "medium_risk_count": medium_risk_count,
+        "low_risk_count": low_risk_count
+    }
+def export_audit_report(
+    risk_report,
+    audit_summary,
+    output_path
+    ):
+        """Export audit results and summary to a formatted Excel report."""
+        with pd.ExcelWriter(
+            output_path,
+            engine="openpyxl"
+        ) as writer:
+
+            risk_report.to_excel(
+                writer,
+                sheet_name="Audit Results",
+                index=False
+            )
+
+            audit_summary.to_excel(
+                writer,
+                sheet_name="Audit Summary",
+                index=False
+            )
+            # Access the generated Audit Results worksheet.
+            results_sheet = writer.sheets["Audit Results"]
+
+            # Make the header row bold.
+            for cell in results_sheet[1]:
+                cell.font = Font(bold=True)
+
+            # Freeze the header while scrolling.
+            results_sheet.freeze_panes = "A2"
+
+            # Add Excel filters to the complete results table.
+            results_sheet.auto_filter.ref = results_sheet.dimensions
+                # Automatically adjust column widths based on content.
+            for column in results_sheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+
+                for cell in column:
+                    if cell.value is not None:
+                        max_length = max(max_length, len(str(cell.value)))
+
+                results_sheet.column_dimensions[column_letter].width = max_length + 2
+                
+                # Format the Amount column as currency.
+            amount_column = risk_report.columns.get_loc("Amount") + 1
+
+            for cell in results_sheet.iter_cols(
+                min_col=amount_column,
+                max_col=amount_column,
+                min_row=2
+            ):
+                for amount_cell in cell:
+                    amount_cell.number_format = '$#,##0.00'
+
+                # Add extra space to the Amount column for currency formatting.
+                amount_letter = results_sheet.cell(
+                row=1,
+                column=amount_column
+            ).column_letter
+
+            results_sheet.column_dimensions[amount_letter].width += 3
+
+                # Visually highlight transaction risk levels.
+            risk_level_column = risk_report.columns.get_loc("Risk_Level") + 1
+
+            high_fill = PatternFill("solid", fgColor="F4CCCC")
+            medium_fill = PatternFill("solid", fgColor="FFF2CC")
+            low_fill = PatternFill("solid", fgColor="D9EAD3")
+
+            for row in range(2, results_sheet.max_row + 1):
+                cell = results_sheet.cell(row=row, column=risk_level_column)
+
+                if cell.value == "High":
+                    cell.fill = high_fill
+                elif cell.value == "Medium":
+                    cell.fill = medium_fill
+                elif cell.value == "Low":
+                    cell.fill = low_fill
+
+                # Access the Audit Summary worksheet.
+                summary_sheet = writer.sheets["Audit Summary"]
+
+            # Make summary headers bold.
+            for cell in summary_sheet[1]:
+                cell.font = Font(bold=True)
+
+            # Automatically adjust summary column widths.
+            for column in summary_sheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+
+                for cell in column:
+                    if cell.value is not None:
+                        max_length = max(max_length, len(str(cell.value)))
+
+                summary_sheet.column_dimensions[column_letter].width = max_length + 3
+
+                    # Create a chart showing the distribution of audit risk levels.
+                chart = BarChart()
+                chart.title = "Risk Distribution"
+                chart.y_axis.title = "Number of Journal Entries"
+                chart.x_axis.title = "Risk Level"
+
+            # Values: High, Medium and Low counts in rows 5–7.
+            data = Reference(
+                summary_sheet,
+                min_col=2,
+                min_row=5,
+                max_row=7
+            )
+
+            # Categories: High Risk, Medium Risk and Low Risk.
+            categories = Reference(
+                summary_sheet,
+                min_col=1,
+                min_row=5,
+                max_row=7
+            )
+
+            chart.add_data(data, titles_from_data=False)
+            chart.set_categories(categories)
+
+            # Place the chart beside the summary.
+            summary_sheet.add_chart(chart, "D2")
+            
+
 # Create timestamp for this audit run
 run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -305,22 +458,14 @@ journal = classify_risk_levels(
 # 8. CREATE AUDIT SUMMARY
 # ============================================================
 
-# Calculate population-level audit statistics.
-total_entries = len(journal)
+summary = calculate_audit_summary(journal)
 
-high_risk_count = (journal["Risk_Level"] == "High").sum()
-medium_risk_count = (journal["Risk_Level"] == "Medium").sum()
-low_risk_count = (journal["Risk_Level"] == "Low").sum()
-
-flagged_entries = (journal["Risk_Score"] > 0).sum()
-
-# Calculate the percentage of the population containing
-# at least one configured risk indicator.
-flagged_percentage = (
-    flagged_entries / total_entries * 100
-    if total_entries > 0
-    else 0
-)
+total_entries = summary["total_entries"]
+flagged_entries = summary["flagged_entries"]
+flagged_percentage = summary["flagged_percentage"]
+high_risk_count = summary["high_risk_count"]
+medium_risk_count = summary["medium_risk_count"]
+low_risk_count = summary["low_risk_count"]
 
 print("\n======================================")
 print("AUDIT ANALYTICS SUMMARY")
@@ -369,128 +514,14 @@ print("\nPrioritized Audit Risk Report:")
 print(risk_report[["Journal_ID","Posting_Date","Amount","Prepared_By","Risk_Score","Risk_Level","Risk_Reasons"]])
 # Export the complete analyzed journal population to Excel.
 # OLD EXPORT - replaced by multi-sheet audit report
-# risk_report.to_excel("output/audit_risk_report.xlsx", index=False)
+# risk_report.to_excel(output_path, index=False)
 # Export audit results and summary into separate Excel worksheets.
-with pd.ExcelWriter(
-    "output/audit_risk_report.xlsx",
-    engine="openpyxl"
-) as writer:
 
-    risk_report.to_excel(
-        writer,
-        sheet_name="Audit Results",
-        index=False
-    )
-
-    audit_summary.to_excel(
-        writer,
-        sheet_name="Audit Summary",
-        index=False
-    )
-    # Access the generated Audit Results worksheet.
-    results_sheet = writer.sheets["Audit Results"]
-
-    # Make the header row bold.
-    for cell in results_sheet[1]:
-        cell.font = Font(bold=True)
-
-    # Freeze the header while scrolling.
-    results_sheet.freeze_panes = "A2"
-
-    # Add Excel filters to the complete results table.
-    results_sheet.auto_filter.ref = results_sheet.dimensions
-        # Automatically adjust column widths based on content.
-    for column in results_sheet.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-
-        for cell in column:
-            if cell.value is not None:
-                max_length = max(max_length, len(str(cell.value)))
-
-        results_sheet.column_dimensions[column_letter].width = max_length + 2
-        
-        # Format the Amount column as currency.
-    amount_column = risk_report.columns.get_loc("Amount") + 1
-
-    for cell in results_sheet.iter_cols(
-        min_col=amount_column,
-        max_col=amount_column,
-        min_row=2
-    ):
-        for amount_cell in cell:
-            amount_cell.number_format = '$#,##0.00'
-
-        # Add extra space to the Amount column for currency formatting.
-        amount_letter = results_sheet.cell(
-        row=1,
-        column=amount_column
-    ).column_letter
-
-    results_sheet.column_dimensions[amount_letter].width += 3
-
-        # Visually highlight transaction risk levels.
-    risk_level_column = risk_report.columns.get_loc("Risk_Level") + 1
-
-    high_fill = PatternFill("solid", fgColor="F4CCCC")
-    medium_fill = PatternFill("solid", fgColor="FFF2CC")
-    low_fill = PatternFill("solid", fgColor="D9EAD3")
-
-    for row in range(2, results_sheet.max_row + 1):
-        cell = results_sheet.cell(row=row, column=risk_level_column)
-
-        if cell.value == "High":
-            cell.fill = high_fill
-        elif cell.value == "Medium":
-            cell.fill = medium_fill
-        elif cell.value == "Low":
-            cell.fill = low_fill
-
-        # Access the Audit Summary worksheet.
-        summary_sheet = writer.sheets["Audit Summary"]
-
-    # Make summary headers bold.
-    for cell in summary_sheet[1]:
-        cell.font = Font(bold=True)
-
-    # Automatically adjust summary column widths.
-    for column in summary_sheet.columns:
-        max_length = 0
-        column_letter = column[0].column_letter
-
-        for cell in column:
-            if cell.value is not None:
-                max_length = max(max_length, len(str(cell.value)))
-
-        summary_sheet.column_dimensions[column_letter].width = max_length + 3
-
-            # Create a chart showing the distribution of audit risk levels.
-        chart = BarChart()
-        chart.title = "Risk Distribution"
-        chart.y_axis.title = "Number of Journal Entries"
-        chart.x_axis.title = "Risk Level"
-
-    # Values: High, Medium and Low counts in rows 5–7.
-    data = Reference(
-        summary_sheet,
-        min_col=2,
-        min_row=5,
-        max_row=7
-    )
-
-    # Categories: High Risk, Medium Risk and Low Risk.
-    categories = Reference(
-        summary_sheet,
-        min_col=1,
-        min_row=5,
-        max_row=7
-    )
-
-    chart.add_data(data, titles_from_data=False)
-    chart.set_categories(categories)
-
-    # Place the chart beside the summary.
-    summary_sheet.add_chart(chart, "D2")
+export_audit_report(
+    risk_report,
+    audit_summary,
+    "output/audit_risk_report.xlsx"
+)
 
 print("\nAudit risk report exported successfully.")    
 
