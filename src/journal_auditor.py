@@ -71,6 +71,104 @@ def validate_journal(journal):
             f"in {len(invalid_amounts)} record(s)."
         )
     
+def identify_weekend_entries(journal):
+    """Identify journal entries posted on Saturday or Sunday."""
+    return journal[journal["Posting_Date"].dt.weekday >= 5]
+def identify_duplicate_entries(journal):
+    """Identify potential duplicate journal entries based on key fields."""
+    return journal[
+        journal.duplicated(
+            subset=[
+                "Posting_Date",
+                "Account",
+                "Description",
+                "Amount",
+                "Prepared_By"
+            ],
+            keep=False
+        )
+    ]
+def identify_round_dollar_entries(journal, round_dollar_base):
+    """Identify transactions divisible by the configured round-dollar base."""
+    return journal[
+        journal["Amount"] % round_dollar_base == 0
+    ]
+def identify_high_value_entries(journal, high_value_threshold):
+    """Identify transactions meeting or exceeding the high-value threshold."""
+    return journal[
+        journal["Amount"] >= high_value_threshold
+    ]
+def calculate_risk_scores(
+    journal,
+    duplicate_entries,
+    risk_weights,
+    round_dollar_base,
+    high_value_threshold
+):
+    """Calculate transaction risk scores and document the risk reasons."""
+        # Every journal entry starts with a risk score of zero.
+    journal["Risk_Score"] = 0
+
+    # Record why each transaction receives its risk score.
+    journal["Risk_Reasons"] = ""
+        # Weekend posting risk
+    journal.loc[
+        journal["Posting_Date"].dt.weekday >= 5,
+        "Risk_Score"
+    ] += risk_weights["weekend_posting"]
+
+    journal.loc[
+        journal["Posting_Date"].dt.weekday >= 5,
+        "Risk_Reasons"
+    ] += "Weekend Posting; "
+        # Round-dollar transaction risk
+    journal.loc[
+        journal["Amount"] % round_dollar_base == 0,
+        "Risk_Score"
+    ] += risk_weights["round_dollar"]
+
+    journal.loc[
+        journal["Amount"] % round_dollar_base == 0,
+        "Risk_Reasons"
+    ] += "Round Dollar; "
+        # High-value transaction risk
+    journal.loc[
+        journal["Amount"] >= high_value_threshold,
+        "Risk_Score"
+    ] += risk_weights["high_value"]
+
+    journal.loc[
+        journal["Amount"] >= high_value_threshold,
+        "Risk_Reasons"
+    ] += "High Value; "
+            # Potential duplicate transaction risk
+    journal.loc[
+        duplicate_entries.index,
+        "Risk_Score"
+    ] += risk_weights["potential_duplicate"]
+
+    journal.loc[
+        duplicate_entries.index,
+        "Risk_Reasons"
+    ] += "Potential Duplicate; "
+    return journal
+
+def classify_risk_levels(journal, risk_levels):
+    """Classify transactions as Low, Medium, or High risk."""
+
+    journal["Risk_Level"] = "Low"
+
+    journal.loc[
+        journal["Risk_Score"] >= risk_levels["medium"],
+        "Risk_Level"
+    ] = "Medium"
+
+    journal.loc[
+        journal["Risk_Score"] >= risk_levels["high"],
+        "Risk_Level"
+    ] = "High"
+
+    return journal
 
 # Create timestamp for this audit run
 run_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -160,63 +258,49 @@ print(journal.dtypes)
 # ============================================================
 
 # Test 1: Identify journal entries posted on Saturday or Sunday
-weekend_entries = journal[journal["Posting_Date"].dt.weekday >= 5]
+weekend_entries = identify_weekend_entries(journal)
 print("\n Weekend Journal Entries:")
 print(weekend_entries)
 # Test 2: Identify potential duplicate journal entries
 # Entries are considered duplicates when these key fields match.
-duplicate_entries = journal[journal.duplicated(subset=["Posting_Date","Account","Description","Amount","Prepared_By"], keep=False)]
+duplicate_entries = identify_duplicate_entries(journal)
 print("\n Duplicate Journal Entries:")
 print(duplicate_entries)
 # Test 3: Identify transactions divisible by the configured
 # round-dollar base (for example, $1,000, $5,000, $10,000).
-round_entries = journal[journal["Amount"] % ROUND_DOLLAR_BASE == 0]
+round_entries = identify_round_dollar_entries(
+    journal,
+    ROUND_DOLLAR_BASE
+)
 print("\n Round-DollarJournal Entries:")
 print(round_entries)
 # Test 4: Identify transactions meeting or exceeding the
 # configured high-value threshold.  
-high_value_entries = journal[journal["Amount"] >= HIGH_VALUE_THRESHOLD]
+high_value_entries = identify_high_value_entries(
+    journal,
+    HIGH_VALUE_THRESHOLD
+)
 print("\n High-Value Journal Entries:")
 print(high_value_entries)
 # ============================================================
 # 6. CALCULATE AUDIT RISK SCORES
 # ============================================================
-
-# Every journal entry starts with a risk score of zero.
-journal["Risk_Score"] = 0 
-# Risk_Reasons provides an audit trail explaining why each
-# transaction received its risk score.
-journal["Risk_Reasons"] = ""
-# Apply audit risk tests
-# Weekend posting risk
-journal.loc[journal["Posting_Date"].dt.weekday >= 5, "Risk_Score"] += RISK_WEIGHTS["weekend_posting"]
-journal.loc[journal["Posting_Date"].dt.weekday >= 5, "Risk_Reasons"] += "Weekend Posting; "
-# Round-dollar transaction risk
-journal.loc[journal["Amount"] % ROUND_DOLLAR_BASE == 0, "Risk_Score"] += RISK_WEIGHTS["round_dollar"]
-journal.loc[journal["Amount"] % ROUND_DOLLAR_BASE == 0, "Risk_Reasons"] += "Round Dollar; "
-# High-value transaction risk
-journal.loc[journal["Amount"] >= HIGH_VALUE_THRESHOLD, "Risk_Score"] += RISK_WEIGHTS["high_value"]
-journal.loc[journal["Amount"] >= HIGH_VALUE_THRESHOLD, "Risk_Reasons"] += "High Value; "
-# Potential duplicate transaction risk
-journal.loc[duplicate_entries.index, "Risk_Score"] += RISK_WEIGHTS["potential_duplicate"]
-journal.loc[duplicate_entries.index, "Risk_Reasons"] += "Potential Duplicate; "
+journal = calculate_risk_scores(
+    journal,
+    duplicate_entries,
+    RISK_WEIGHTS,
+    ROUND_DOLLAR_BASE,
+    HIGH_VALUE_THRESHOLD
+)
 # ============================================================
 # 7. CLASSIFY TRANSACTIONS BY RISK LEVEL
 # ============================================================
 
-# All transactions start as Low risk. Transactions are then
-# upgraded to Medium or High based on configured score thresholds.
-journal["Risk_Level"] = "Low"
+journal = classify_risk_levels(
+    journal,
+    RISK_LEVELS
+)
 
-journal.loc[
-    journal["Risk_Score"] >= RISK_LEVELS["medium"],
-    "Risk_Level"
-] = "Medium"
-
-journal.loc[
-    journal["Risk_Score"] >= RISK_LEVELS["high"],
-    "Risk_Level"
-] = "High"
 # ============================================================
 # 8. CREATE AUDIT SUMMARY
 # ============================================================
