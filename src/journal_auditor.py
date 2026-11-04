@@ -384,146 +384,108 @@ if RISK_LEVELS["medium"] >= RISK_LEVELS["high"]:
         "must be lower than high risk threshold."
     )
 
-# ============================================================
-# 3. LOAD AND PREPARE JOURNAL DATA
-# ============================================================
 
-# Load journal entries from CSV
-journal = load_journal("data/journal.csv")
+def run_audit(
+    input_path="data/journal.csv",
+    output_path="output/audit_risk_report.xlsx"
+):
+    """Run the complete journal-entry audit workflow."""
+
+    # Load and validate journal data
+    journal = load_journal(input_path)
+    validate_journal(journal)
+
+    # Run audit tests
+    weekend_entries = identify_weekend_entries(journal)
+
+    duplicate_entries = identify_duplicate_entries(journal)
+
+    round_entries = identify_round_dollar_entries(
+        journal,
+        ROUND_DOLLAR_BASE
+    )
+
+    high_value_entries = identify_high_value_entries(
+        journal,
+        HIGH_VALUE_THRESHOLD
+    )
+
+    # Calculate transaction risk scores
+    journal = calculate_risk_scores(
+        journal,
+        duplicate_entries,
+        RISK_WEIGHTS,
+        ROUND_DOLLAR_BASE,
+        HIGH_VALUE_THRESHOLD
+    )
+
+    # Classify transactions by risk level
+    journal = classify_risk_levels(
+        journal,
+        RISK_LEVELS
+    )
+
+    # Calculate audit summary
+    summary = calculate_audit_summary(journal)
+
+    # Create summary table for Excel
+    audit_summary = pd.DataFrame({
+        "Metric": [
+            "Run Timestamp",
+            "Input Fingerprint",
+            "Total Entries",
+            "Flagged Entries",
+            "Flagged Percentage",
+            "High Risk",
+            "Medium Risk",
+            "Low Risk"
+        ],
+        "Value": [
+            run_timestamp,
+            input_fingerprint,
+            summary["total_entries"],
+            summary["flagged_entries"],
+            summary["flagged_percentage"],
+            summary["high_risk_count"],
+            summary["medium_risk_count"],
+            summary["low_risk_count"]
+        ]
+    })
+
+    # Create risk report
+    risk_report = journal.sort_values(
+        by="Risk_Score",
+        ascending=False
+    )
+    # Display prioritized audit risk report
+    print("\nPrioritized Audit Risk Report:")
+    print(risk_report[[
+        "Journal_ID",
+        "Posting_Date",
+        "Amount",
+        "Prepared_By",
+        "Risk_Score",
+        "Risk_Level",
+        "Risk_Reasons"
+    ]])
+    # Export Excel report
+    export_audit_report(
+        risk_report,
+        audit_summary,
+        output_path
+    )
+    print("\nAudit risk report exported successfully.")
+
+    return journal
 
 
-# ============================================================
-# 4. VALIDATE JOURNAL DATA
-# ============================================================
+def main():
+    print("Audit Intelligence Platform - Journal Auditor")
 
-validate_journal(journal)
+    run_audit()
 
-
-# Display basic information about the journal dataset
-print(journal.head())
-print("Total journal entries:", len(journal))
-print("\n Journal Fields:" )
-print(journal.columns)
-print("\n Journal Data Types:")
-print(journal.dtypes)
-# ============================================================
-# 5. IDENTIFY AUDIT EXCEPTIONS
-# ============================================================
-
-# Test 1: Identify journal entries posted on Saturday or Sunday
-weekend_entries = identify_weekend_entries(journal)
-print("\n Weekend Journal Entries:")
-print(weekend_entries)
-# Test 2: Identify potential duplicate journal entries
-# Entries are considered duplicates when these key fields match.
-duplicate_entries = identify_duplicate_entries(journal)
-print("\n Duplicate Journal Entries:")
-print(duplicate_entries)
-# Test 3: Identify transactions divisible by the configured
-# round-dollar base (for example, $1,000, $5,000, $10,000).
-round_entries = identify_round_dollar_entries(
-    journal,
-    ROUND_DOLLAR_BASE
-)
-print("\n Round-DollarJournal Entries:")
-print(round_entries)
-# Test 4: Identify transactions meeting or exceeding the
-# configured high-value threshold.  
-high_value_entries = identify_high_value_entries(
-    journal,
-    HIGH_VALUE_THRESHOLD
-)
-print("\n High-Value Journal Entries:")
-print(high_value_entries)
-# ============================================================
-# 6. CALCULATE AUDIT RISK SCORES
-# ============================================================
-journal = calculate_risk_scores(
-    journal,
-    duplicate_entries,
-    RISK_WEIGHTS,
-    ROUND_DOLLAR_BASE,
-    HIGH_VALUE_THRESHOLD
-)
-# ============================================================
-# 7. CLASSIFY TRANSACTIONS BY RISK LEVEL
-# ============================================================
-
-journal = classify_risk_levels(
-    journal,
-    RISK_LEVELS
-)
-
-# ============================================================
-# 8. CREATE AUDIT SUMMARY
-# ============================================================
-
-summary = calculate_audit_summary(journal)
-
-total_entries = summary["total_entries"]
-flagged_entries = summary["flagged_entries"]
-flagged_percentage = summary["flagged_percentage"]
-high_risk_count = summary["high_risk_count"]
-medium_risk_count = summary["medium_risk_count"]
-low_risk_count = summary["low_risk_count"]
-
-print("\n======================================")
-print("AUDIT ANALYTICS SUMMARY")
-print("======================================")
-print(f"Total Journal Entries : {total_entries}")
-print(f"Flagged Entries       : {flagged_entries}")
-print(f"Flagged Percentage    : {flagged_percentage:.2f}%")
-print(f"High Risk             : {high_risk_count}")
-print(f"Medium Risk           : {medium_risk_count}")
-print(f"Low Risk              : {low_risk_count}")
-
-# Create a summary table for the Excel audit report.
-audit_summary = pd.DataFrame({
-    "Metric": [
-        "Run Timestamp",
-        "Input Fingerprint",
-        "Total Journal Entries",
-        "Flagged Entries",
-        "Flagged Percentage",
-        "High Risk",
-        "Medium Risk",
-        "Low Risk"
-    ],
-    "Value": [
-        run_timestamp,
-        input_fingerprint,
-        total_entries,
-        flagged_entries,
-        f"{flagged_percentage:.2f}%",
-        high_risk_count,
-        medium_risk_count,
-        low_risk_count
-    ]
-})
-
-# ============================================================
-# 9. PRIORITIZE AND EXPORT AUDIT RESULTS
-# ============================================================
-
-# Sort highest-risk transactions first so auditors can focus
-# their review on entries with the greatest number/weight of
-# configured risk indicators.
-risk_report = journal.sort_values(by="Risk_Score", ascending=False)
-# Display prioritized results
-print("\nPrioritized Audit Risk Report:")
-print(risk_report[["Journal_ID","Posting_Date","Amount","Prepared_By","Risk_Score","Risk_Level","Risk_Reasons"]])
-# Export the complete analyzed journal population to Excel.
-# OLD EXPORT - replaced by multi-sheet audit report
-# risk_report.to_excel(output_path, index=False)
-# Export audit results and summary into separate Excel worksheets.
-
-export_audit_report(
-    risk_report,
-    audit_summary,
-    "output/audit_risk_report.xlsx"
-)
-
-print("\nAudit risk report exported successfully.")    
+if __name__ == "__main__":
+    main()
 
 
 # ============================================================
@@ -546,10 +508,3 @@ print("\nAudit risk report exported successfully.")
 # git log --oneline          # View previous commits
 # git diff                  # View changes not yet staged
 # git status                # Check current Git status
-
-def main():
-    print("Audit Intelligence Platform - Journal Auditor")
-
-
-if __name__ == "__main__":
-    main()
